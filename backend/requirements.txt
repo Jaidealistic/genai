@@ -1,0 +1,21 @@
+# FastAPI & Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+pydantic==2.10.4
+
+# LLM Providers
+google-generativeai==0.8.4
+groq==0.15.0
+
+# Orchestration
+langgraph==0.2.62
+langchain-core==0.3.29
+
+# Evaluation & Metrics
+datasets==3.2.0
+scipy==1.15.0
+wandb==0.19.1
+
+# CORS
+python-multipart==0.0.20
