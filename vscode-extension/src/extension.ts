@@ -118,6 +118,9 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(generateCommand);
     context.subscriptions.push(outputChannel);
 
+    // Register Sidebar View
+    vscode.window.registerTreeDataProvider('self-correcting-agent-view', new AgentViewProvider());
+
     // Status bar item
     const statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right, 100
@@ -127,6 +130,34 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.command = 'self-correcting-agent.generate';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
+}
+
+class AgentViewProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: vscode.TreeItem): Thenable<vscode.TreeItem[]> {
+        if (element) { return Promise.resolve([]); }
+
+        const generateItem = new vscode.TreeItem('Generate Code with AI', vscode.TreeItemCollapsibleState.None);
+        generateItem.command = {
+            command: 'self-correcting-agent.generate',
+            title: 'Generate Code'
+        };
+        generateItem.iconPath = new vscode.ThemeIcon('add');
+        generateItem.tooltip = 'Trigger code generation with drift detection';
+
+        const outputItem = new vscode.TreeItem('View Last Audit Trail', vscode.TreeItemCollapsibleState.None);
+        outputItem.command = {
+            command: 'workbench.action.output.toggleOutput',
+            title: 'View Output'
+        };
+        outputItem.iconPath = new vscode.ThemeIcon('list-unordered');
+        outputItem.tooltip = 'See the step-by-step reasoning from the last generation';
+
+        return Promise.resolve([generateItem, outputItem]);
+    }
 }
 
 function showAuditTrail(result: GenerationResult, prompt: string) {

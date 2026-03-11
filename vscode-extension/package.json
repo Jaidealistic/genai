@@ -11,18 +11,35 @@
     "Programming Languages",
     "Machine Learning"
   ],
-  "activationEvents": [
-    "onCommand:self-correcting-agent.generate"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "self-correcting-agent.generate",
         "title": "Generate Code with Self-Correction",
-        "category": "AI Agent"
+        "category": "AI Agent",
+        "icon": "$(add)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "self-correcting-agent-explorer",
+          "title": "Self-Correcting Agent",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "views": {
+      "self-correcting-agent-explorer": [
+        {
+          "id": "self-correcting-agent-view",
+          "name": "AI Agent Controls",
+          "icon": "$(robot)"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "self-correcting-agent.generate",
