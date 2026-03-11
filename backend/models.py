@@ -13,7 +13,9 @@ import google.generativeai as genai
 from groq import Groq
 from dotenv import load_dotenv
 
+# Load .env from current dir or parent dir
 load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 logger = logging.getLogger(__name__)
 
 # ── System Prompts ───────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ class CodeGenerator:
         }
 
         self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-flash-latest",
             generation_config=self.generation_config,
             system_instruction=GENERATOR_SYSTEM_PROMPT,
         )
@@ -112,19 +114,11 @@ Generate step {step_number}. Context from previous steps:
 """
         try:
             response = self.model.generate_content(prompt)
-            self.total_tokens += response.usage_metadata.total_token_count
-            result = json.loads(response.text)
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
+            result = self._parse_response(response.text)
             result['step_number'] = step_number
             return result
-        except json.JSONDecodeError:
-            logger.error("Failed to parse Gemini response as JSON")
-            # Try to extract JSON from the response
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            return json.loads(text)
         except Exception as e:
             logger.error(f"Gemini generation failed: {e}")
             raise
@@ -154,17 +148,11 @@ Ensure this step:
 """
         try:
             response = self.model.generate_content(corrective_prompt)
-            self.total_tokens += response.usage_metadata.total_token_count
-            result = json.loads(response.text)
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
+            result = self._parse_response(response.text)
             result['step_number'] = step_number
             return result
-        except json.JSONDecodeError:
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            return json.loads(text)
         except Exception as e:
             logger.error(f"Gemini correction failed: {e}")
             raise
@@ -180,20 +168,34 @@ Provide the full implementation as step 1.
 """
         try:
             response = self.model.generate_content(prompt)
-            self.total_tokens += response.usage_metadata.total_token_count
-            result = json.loads(response.text)
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
+            result = self._parse_response(response.text)
             result['step_number'] = 1
             return result
-        except json.JSONDecodeError:
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            return json.loads(text)
         except Exception as e:
             logger.error(f"Gemini baseline generation failed: {e}")
             raise
+
+    @staticmethod
+    def _parse_response(text: str) -> dict:
+        """Parse JSON from Gemini response, handling markdown code fences."""
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # Try extracting from markdown code fence
+            if "```" in text:
+                parts = text.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    try:
+                        return json.loads(part)
+                    except json.JSONDecodeError:
+                        continue
+            raise ValueError(f"Could not parse JSON from response: {text[:200]}")
 
     def get_total_tokens(self) -> int:
         """Return total tokens used across all calls."""
@@ -215,7 +217,7 @@ class CodeCritic:
             raise ValueError("GROQ_API_KEY environment variable not set")
 
         self.client = Groq(api_key=api_key)
-        self.model_name = "llama-3.1-70b-versatile"
+        self.model_name = "llama-3.3-70b-versatile"
         self.total_tokens = 0
 
     def evaluate_step(self, original_task: str, constraints: list,
