@@ -55,7 +55,7 @@ def init_wandb(num_problems: int):
             project="self-correcting-agent",
             config={
                 "model_generator": "gemini-1.5-flash",
-                "model_critic": "llama-3.1-70b-versatile",
+                "model_critic": "llama-3.3-70b-versatile",
                 "dataset": f"humaneval-{num_problems}",
                 "max_correction_attempts": 3,
                 "max_steps": 3,
@@ -81,7 +81,7 @@ async def run_full_evaluation(num_problems: int = 10, use_wandb: bool = True):
     print("=" * 60)
     print(f"\n  Problems: {num_problems}")
     print(f"  Generator: Gemini 1.5 Flash")
-    print(f"  Critic: Llama 3.1 70B (Groq)")
+    print(f"  Critic: Llama 3.3 70B (Groq)")
     print(f"  W&B Logging: {'Enabled' if use_wandb else 'Disabled'}")
     print()
 
@@ -117,6 +117,9 @@ async def run_full_evaluation(num_problems: int = 10, use_wandb: bool = True):
                 "baseline_time": result["time"],
                 "problem_index": i,
             })
+        
+        # Rate limiting for free tier
+        await asyncio.sleep(2)
 
     baseline_pass_count = sum(1 for r in baseline_results if r["passed"])
     print(f"\n  Baseline: {baseline_pass_count}/{len(problems)} passed "
@@ -149,6 +152,9 @@ async def run_full_evaluation(num_problems: int = 10, use_wandb: bool = True):
                 "corrections": corrections,
                 "problem_index": i,
             })
+        
+        # Rate limiting for free tier
+        await asyncio.sleep(2)
 
     system_pass_count = sum(1 for r in system_results if r["passed"])
     print(f"\n  System: {system_pass_count}/{len(problems)} passed "

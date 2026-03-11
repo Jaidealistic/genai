@@ -39,11 +39,19 @@ def evaluate_functional_correctness(generated_code: str, test_suite: list) -> di
                 "error_type": type(e).__name__,
             })
 
-    total = len(test_suite) if test_suite else 1
+    total = len(test_suite)
+    if total == 0:
+        return {
+            "passed": 0,
+            "total": 0,
+            "pass_rate": 0,
+            "failed_details": [{"test_index": 0, "test": "N/A", "error": "No test cases provided", "error_type": "MetadataError"}],
+        }
+
     return {
         "passed": passed_tests,
-        "total": len(test_suite),
-        "pass_rate": passed_tests / total if total > 0 else 0,
+        "total": total,
+        "pass_rate": passed_tests / total,
         "failed_details": failed_tests,
     }
 

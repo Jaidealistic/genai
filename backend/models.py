@@ -87,14 +87,14 @@ class CodeGenerator:
         genai.configure(api_key=api_key)
 
         self.generation_config = {
-            "temperature": 0.7,
+            "temperature": 0.5,
             "top_p": 0.95,
-            "max_output_tokens": 1500,
+            "max_output_tokens": 4096,
             "response_mime_type": "application/json",
         }
 
         self.model = genai.GenerativeModel(
-            model_name="gemini-flash-latest",
+            model_name="gemini-1.5-flash",
             generation_config=self.generation_config,
             system_instruction=GENERATOR_SYSTEM_PROMPT,
         )
@@ -179,23 +179,46 @@ Provide the full implementation as step 1.
 
     @staticmethod
     def _parse_response(text: str) -> dict:
-        """Parse JSON from Gemini response, handling markdown code fences."""
+        """Parse JSON from Gemini response, handling markdown code fences and truncation."""
         text = text.strip()
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            # Try extracting from markdown code fence
-            if "```" in text:
-                parts = text.split("```")
-                for part in parts:
-                    part = part.strip()
-                    if part.startswith("json"):
-                        part = part[4:].strip()
+        
+        # Helper to try parsing a string
+        def try_parse(s):
+            s = s.strip()
+            # Remove possible markdown code fences
+            if s.startswith("```"):
+                lines = s.splitlines()
+                if len(lines) > 1:
+                    if lines[0].strip().startswith("```"):
+                        s = "\n".join(lines[1:])
+                    if s.endswith("```"):
+                        s = s[:-3]
+            s = s.strip()
+            if s.startswith("json"):
+                s = s[4:].strip()
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError:
+                # Catch partial JSON if possible (very basic)
+                if s.startswith("{") and not s.endswith("}"):
                     try:
-                        return json.loads(part)
-                    except json.JSONDecodeError:
-                        continue
-            raise ValueError(f"Could not parse JSON from response: {text[:200]}")
+                        return json.loads(s + '"}')
+                    except:
+                        pass
+                return None
+
+        # 1. Try direct parse
+        result = try_parse(text)
+        if result: return result
+
+        # 2. Try extracting JSON block
+        if "{" in text and "}" in text:
+            start = text.find("{")
+            end = text.rfind("}")
+            result = try_parse(text[start:end+1])
+            if result: return result
+
+        raise ValueError(f"Could not parse JSON from response. Length: {len(text)}. Snippet: {text[:100]}...")
 
     def get_total_tokens(self) -> int:
         """Return total tokens used across all calls."""
