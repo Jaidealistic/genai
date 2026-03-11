@@ -13,7 +13,6 @@ venv/
 .venv/
 
 # IDE
-.vscode/
 .idea/
 
 # Database
