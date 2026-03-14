@@ -1,24 +1,16 @@
-"""
-LLM Client Wrappers for the Self-Correcting IDE Agent.
-- CodeGenerator: Gemini 1.5 Flash (Actor role)
-- CodeCritic: Groq Llama 3.1 70B (Critic role)
-"""
-
 import os
 import json
 import logging
 from typing import Optional
 
-import google.generativeai as genai
+import ollama
 from groq import Groq
 from dotenv import load_dotenv
 
-# Load .env from current dir or parent dir
 load_dotenv()
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 logger = logging.getLogger(__name__)
 
-# ── System Prompts ───────────────────────────────────────────────────────
 
 GENERATOR_SYSTEM_PROMPT = """
 You are a Python code generator that produces high-quality, step-by-step solutions.
@@ -74,61 +66,60 @@ BE STRICT: Even minor deviations from requirements should be flagged if they cou
 """
 
 
-# ── Code Generator (Gemini 1.5 Flash) ───────────────────────────────────
 
 class CodeGenerator:
-    """Wraps Gemini 1.5 Flash for step-by-step code generation."""
+    """Wraps local Ollama llama3.2 for step-by-step code generation."""
+
+    MODEL = "llama3.2"
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set")
-
-        genai.configure(api_key=api_key)
-
-        self.generation_config = {
-            "temperature": 0.5,
-            "top_p": 0.95,
-            "max_output_tokens": 4096,
-            "response_mime_type": "application/json",
-        }
-
-        self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config=self.generation_config,
-            system_instruction=GENERATOR_SYSTEM_PROMPT,
-        )
-
         self.total_tokens = 0
+        try:
+            ollama.list()
+        except Exception as e:
+            raise ValueError(
+                f"Cannot connect to Ollama at localhost:11434 — is it running? ({e})"
+            )
+
+    def _chat(self, user_prompt: str) -> tuple[str, int]:
+        """Call Ollama and return (text, tokens_used)."""
+        response = ollama.chat(
+            model=self.MODEL,
+            messages=[
+                {"role": "system", "content": GENERATOR_SYSTEM_PROMPT},
+                {"role": "user",   "content": user_prompt},
+            ],
+            format="json",
+            options={"temperature": 0.5, "num_predict": 4096},
+        )
+        text = response["message"]["content"]
+        tokens = response.get("prompt_eval_count", 0) + response.get("eval_count", 0)
+        return text, tokens
 
     def generate_step(self, task: str, constraints: list,
                       previous_steps: list, step_number: int) -> dict:
         """Generate the next code step."""
-        prompt = f"""
-Task: {task}
+        prompt = f"""Task: {task}
 Constraints: {json.dumps(constraints)}
 Previous steps completed: {len(previous_steps)}
 
 Generate step {step_number}. Context from previous steps:
-{json.dumps(previous_steps, indent=2)}
-"""
+{json.dumps(previous_steps, indent=2)}"""
         try:
-            response = self.model.generate_content(prompt)
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
-            result = self._parse_response(response.text)
-            result['step_number'] = step_number
+            text, tokens = self._chat(prompt)
+            self.total_tokens += tokens
+            result = self._parse_response(text)
+            result["step_number"] = step_number
             return result
         except Exception as e:
-            logger.error(f"Gemini generation failed: {e}")
+            logger.error(f"Ollama generation failed: {e}")
             raise
 
     def generate_correction(self, task: str, constraints: list,
                             previous_steps: list, step_number: int,
                             drift_info: dict) -> dict:
         """Regenerate a faulty step with corrective context."""
-        corrective_prompt = f"""
-CORRECTION NEEDED:
+        prompt = f"""CORRECTION NEEDED:
 
 Original Task: {task}
 
@@ -144,37 +135,32 @@ Task: Regenerate ONLY step {step_number} to fix:
 Ensure this step:
 1. Addresses: {drift_info.get('addresses_requirement', 'the stated requirement')}
 2. Does NOT contradict previous steps
-3. Adheres to all constraints: {json.dumps(constraints)}
-"""
+3. Adheres to all constraints: {json.dumps(constraints)}"""
         try:
-            response = self.model.generate_content(corrective_prompt)
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
-            result = self._parse_response(response.text)
-            result['step_number'] = step_number
+            text, tokens = self._chat(prompt)
+            self.total_tokens += tokens
+            result = self._parse_response(text)
+            result["step_number"] = step_number
             return result
         except Exception as e:
-            logger.error(f"Gemini correction failed: {e}")
+            logger.error(f"Ollama correction failed: {e}")
             raise
 
     def generate_baseline(self, task: str, constraints: list) -> dict:
         """Generate code without self-correction (baseline evaluation)."""
-        prompt = f"""
-Task: {task}
+        prompt = f"""Task: {task}
 Constraints: {json.dumps(constraints)}
 
 Generate a complete Python solution in a single step.
-Provide the full implementation as step 1.
-"""
+Provide the full implementation as step 1."""
         try:
-            response = self.model.generate_content(prompt)
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                self.total_tokens += getattr(response.usage_metadata, 'total_token_count', 0)
-            result = self._parse_response(response.text)
-            result['step_number'] = 1
+            text, tokens = self._chat(prompt)
+            self.total_tokens += tokens
+            result = self._parse_response(text)
+            result["step_number"] = 1
             return result
         except Exception as e:
-            logger.error(f"Gemini baseline generation failed: {e}")
+            logger.error(f"Ollama baseline generation failed: {e}")
             raise
 
     @staticmethod
@@ -229,7 +215,6 @@ Provide the full implementation as step 1.
         self.total_tokens = 0
 
 
-# ── Code Critic (Groq Llama 3.1 70B) ────────────────────────────────────
 
 class CodeCritic:
     """Wraps Groq Llama 3.1 70B for drift detection and validation."""

@@ -16,6 +16,12 @@
   "contributes": {
     "commands": [
       {
+        "command": "self-correcting-agent.openPanel",
+        "title": "Open Agent Panel",
+        "category": "AI Agent",
+        "icon": "$(hubot)"
+      },
+      {
         "command": "self-correcting-agent.generate",
         "title": "Generate Code with Self-Correction",
         "category": "AI Agent",
@@ -42,10 +48,9 @@
     },
     "keybindings": [
       {
-        "command": "self-correcting-agent.generate",
+        "command": "self-correcting-agent.openPanel",
         "key": "ctrl+shift+g",
-        "mac": "cmd+shift+g",
-        "when": "editorTextFocus"
+        "mac": "cmd+shift+g"
       }
     ],
     "configuration": {
