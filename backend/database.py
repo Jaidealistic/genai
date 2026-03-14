@@ -146,8 +146,8 @@ class StateDatabase:
     # ── Session Operations ───────────────────────────────────────────────
 
     def create_session(self, task_id: str, system_type: str,
-                       model_generator: str = "gemini-1.5-flash",
-                       model_critic: str = "llama-3.1-70b-versatile") -> int:
+                       model_generator: str = "llama3.2",
+                       model_critic: str = "llama-3.3-70b-versatile") -> int:
         """Create a new generation session."""
         self.cursor.execute("""
             INSERT INTO generation_sessions (task_id, system_type, model_generator, model_critic, status)

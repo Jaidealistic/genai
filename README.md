@@ -1,88 +1,76 @@
-# Project Report: Self-Correcting IDE Agent
+# Self-Correcting IDE Agent: Structural Drift Detection
 
 ## 1. Executive Summary
-The Self-Correcting IDE Agent is a sophisticated code generation system designed to minimize logical drift and semantic inconsistencies in AI-generated code. By employing a multi-agent orchestrated workflow, the system utilizes Google Gemini 1.5 Flash as the generative "Actor" and Groq Llama 3.3 70B as the analytic "Critic." The architecture ensures that every line of generated code is validated through deterministic AST checks, rule-based heuristics, and high-level LLM reasoning before finalization.
+The Self-Correcting IDE Agent is a research prototype designed to minimize "logical drift" in AI-generated code. It utilizes a multi-agent orchestration pattern where a local **Actor** (Ollama llama3.2) generates code incrementally, while a high-reasoning **Critic** (Groq Llama 3.3 70B) validates each step. The system is integrated directly into VS Code, providing real-time audit trails of the agent's reasoning and self-correction cycles.
 
 ## 2. Technical Architecture
-The system is built on a modular architecture comprising a localized IDE extension and a robust backend orchestration layer.
+The system employs a "layered validation" strategy to ensure code quality and requirement adherence.
 
-### 2.1 Backend Components
-- **Orchestration Layer**: Utilizes LangGraph to manage the stateful transition between generation, validation, and potential regeneration cycles.
-- **Generative Engine**: Google Gemini 1.5 Flash, configured with robust JSON parsing and error-handling capabilities to ensure consistent code output.
-- **Validation Suite**: 
-    - **AST Validator**: Performs syntax verification using Python's Abstract Syntax Tree module.
-    - **Rule Engine**: enforces constraints regarding function signatures, unauthorized imports, and variable usage.
-    - **LLM Critic**: Powered by Groq Llama 3.3 70B, providing deep semantic analysis of code logic against original task requirements.
-- **Persistence Layer**: An SQLite database tracks every task, session, and validation step, providing a comprehensive audit trail for analysis.
+### 2.1 Layered Validation Pipeline
+1. **AST Validator**: Deterministic syntax verification using Python's `ast` module.
+2. **Rule Engine**: Heuristic checks for signature drift, unauthorized imports, and undefined variables.
+3. **LLM Critic**: Semantic analysis powered by **Groq Llama 3.3 70B**, detecting subtle logical inconsistencies.
 
-### 2.2 Frontend Components
-- **VS Code Extension**: Written in TypeScript, providing a seamless user interface via an Activity Bar icon and customizable keybindings (Ctrl+Shift+G).
-- **Audit Interface**: A dedicated output channel displays real-time reasoning and drift detection results from the Critic.
+### 2.2 Core Components
+- **Backend**: FastAPI server orchestrating the **LangGraph** workflow.
+- **Actor (Generator)**: Local **Ollama llama3.2** for privacy and rapid iteration.
+- **Persistence**: SQLite database (`agent_state.db`) tracking every generation step and validation result.
+- **Frontend**: VS Code Extension (TypeScript) providing an Activity Bar interface and real-time reasoning logs.
 
-## 3. Implementation Status
+## 3. Grading Quick Start (For Professor)
 
-### 3.1 Completed Features
-- **Stateless/Stateful Generation**: Support for both single-shot (baseline) and multi-step (self-correcting) generation workflows.
-- **Robust Error Handling**: Implementation of quota management for Gemini Free Tier (automatic rate-limiting) and resilient JSON parsing logic.
-- **Human Eval Pipeline**: A complete evaluation suite to benchmark the agent against the OpenAI HumanEval dataset, measuring Pass@1 accuracy, token efficiency, and latency.
-- **Telemetry**: Optional integration with Weights & Biases for experiment tracking and metrics visualization.
-- **Sidebar Integration**: Dedicated VS Code sidebar for easy access to generation controls and audit trails.
+To evaluate the system quickly, follow these steps:
 
-### 3.2 Roadmap (Future Work)
-- **Multi-File Context**: Extending the Critic's awareness to include broader project context and cross-file dependencies.
-- **Reinforcement Learning**: Implementing a feedback loop to optimize the Critic's judgment based on execution success rates.
-- **Additional Language Support**: Expanding the validation rules and prompts to support JavaScript, TypeScript, and Go.
-- **Streaming Generation**: Implementing real-time code streaming to improve UX during long generation tasks.
+1. **Startup Backend**:
+   ```bash
+   cd backend
+   # Ensure Ollama is running and Llama 3.2 is pulled: ollama pull llama3.2
+   pip install -r requirements.txt
+   python -m uvicorn main:app --reload
+   ```
+2. **Launch Extension**:
+   - Open the `vscode-extension` folder in VS Code.
+   - Press `F5` to start the Extension Development Host.
+3. **Trigger Generation**:
+   - In the new window, use `Ctrl+Shift+G` (or use the Sidebar icon).
+   - Enter a prompt (e.g., "Create a data processing pipeline with error handling").
+   - Watch the **Output Channel** ("Self-Correcting Agent") for real-time drift detection logs.
 
 ## 4. Installation and Setup
 
 ### 4.1 Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher
-- Valid API Keys for Google Gemini and Groq
+- **Python 3.10+**
+- **Node.js 18+**
+- **Ollama** (running locally with `llama3.2` pulled)
+- **Groq API Key** (Set in `.env` at project root)
 
 ### 4.2 Backend Configuration
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Configure environment variables in a `.env` file at the project root:
+1. Navigate to `backend/`.
+2. Create a `.env` file (or use the one in root) with:
    ```env
-   GEMINI_API_KEY=your_key_here
    GROQ_API_KEY=your_key_here
-   WANDB_API_KEY=your_key_here (optional)
    ```
-4. Initialize the server:
+3. Initialize the server:
    ```bash
-   python -m uvicorn main:app --reload --port 8000
+   python -m uvicorn main:app --port 8000
    ```
 
 ### 4.3 VS Code Extension Setup
-1. Navigate to the extension directory:
-   ```bash
-   cd vscode-extension
-   ```
-2. Install Node.js dependencies:
-   ```bash
-   npm install
-   ```
-3. Compile the extension:
-   ```bash
-   npm run compile
-   ```
-4. Open the project in VS Code and press `F5` to launch the "Extension Development Host."
+1. Navigate to `vscode-extension/`.
+2. `npm install` && `npm run compile`.
+3. Launch via `F5` or install the generated `.vsix`.
 
 ## 5. Evaluation and Metrics
-To verify the system's performance against the baseline, run the evaluation script:
+The system includes a benchmarking suite against the **OpenAI HumanEval** dataset.
 ```bash
 cd backend
-python run_evaluation.py --num-problems 10 --no-wandb
+python run_evaluation.py --num-problems 5 --no-wandb
 ```
-This utility generates a detailed `evaluation_results.json` file containing statistical analysis of accuracy and efficiency.
+This generates `evaluation_results.json`, comparing the self-correcting system against a vanilla baseline.
 
 ## 6. Audit Trail and Logging
-Real-time reasoning logs can be viewed in the VS Code "Output" panel under the "Self-Correcting Agent" channel. This provides transparency into why the Critic flagged specific code segments for drift or inconsistency.
+Reasoning logs are streamed to the VS Code **Output** panel. The system explicitly logs:
+- **[Generated]**: Initial code chunk.
+- **[Critic Detected Drift]**: Explanation of why the code deviated from requirements.
+- **[Regenerated]**: The agent's attempt to fix its own logic.
+- **[Validated]**: Final acceptance of the code chunk.
